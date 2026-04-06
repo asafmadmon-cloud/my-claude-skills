@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.png
+*.csv
+*.json
+!evals/evals.json
+*.code-workspace
+.DS_Store
+Thumbs.db
