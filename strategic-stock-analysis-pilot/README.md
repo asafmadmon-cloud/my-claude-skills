@@ -15,10 +15,12 @@ Every analysis produces a **Buffett Score (0–100)** with a clear buy/hold/sell
 
 | Mode | Trigger | Output |
 |------|---------|--------|
-| Default | Type a ticker (e.g. `AAPL`) | Full analysis |
+| Default | Type a ticker (e.g. `AAPL`) | Full auto-detected analysis (stock or ETF) |
+| `MODE1: TICKER` | Force stock analysis | Full Mode 1 stock deep-dive |
+| `MODE1-ETF: TICKER` | Force ETF analysis | Full ETF efficiency audit |
+| `MODE2: semiconductors` | Broad market/sector question | Sector opportunity scan |
 | `QUICK: TICKER` | Sniff test | Summary card only |
 | `DEEP: TICKER` | Full research | All sections + all calculations shown |
-| `MODE2: semiconductors` | Broad question | Sector opportunity scan |
 
 ---
 
