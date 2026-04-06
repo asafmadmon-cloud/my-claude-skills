@@ -17,6 +17,7 @@ Feel free to use, fork, or adapt any skill for your own projects.
 | Skill | Description | Domain |
 |-------|-------------|--------|
 | [strategic-stock-analysis-pilot](./strategic-stock-analysis-pilot/README.md) | Warren Buffett-style stock & ETF analysis with Buffett Score (0–100) | Investment Research |
+| [git-skill-audit](./git-skill-audit/README.md) | Pre-install security auditor for Claude skills, plugins, and GitHub repos — auto-triggers on install intent | Security |
 
 ---
 
