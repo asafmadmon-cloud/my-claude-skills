@@ -76,10 +76,16 @@ This calculates: Owner Earnings DCF, Graham Number, Margin of Safety, and compon
 ```bash
 C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe {skillDir}/scripts/report_generator.py <TICKER>
 ```
-This produces: the structured text report + all charts saved as PNG files.
+This produces: the structured text report + all charts saved as PNG files (score breakdown, MOAT radar, Buffett gauge, 36-month candlestick).
 
-### Step 5: Present to User
-Display the Quick Summary Card first, then the full report. Reference charts by filename. Conclude with the mandatory Final Summary block.
+### Step 5: Generate PDF Investment Memo
+```bash
+C:/Users/User/AppData/Local/Programs/Python/Python312/python.exe {skillDir}/scripts/generate_pdf.py <TICKER>
+```
+This produces: the full dark-theme PDF investment memo saved as `<TICKER>_investment_memo.pdf` in the working directory. The PDF includes: executive summary, 5 KPI tiles, Buffett Score ring, Buffett 4-filter check, all analysis charts at full width, 36-month candlestick price chart, all 10 sections, analyst divergence box (when applicable), and the final summary block. **Always run this step** — do not skip PDF generation.
+
+### Step 6: Present to User
+Display the Quick Summary Card first, then the full report. Provide the PDF path to the user. Conclude with the mandatory Final Summary block.
 
 ---
 
@@ -339,11 +345,29 @@ Analysis Depth:            [Sniff Test | Full Investment Memo]
 
 ---
 
+## ANALYST DIVERGENCE — MANDATORY RULE
+
+**When the Buffett Score verdict differs from analyst consensus, you MUST include a dedicated divergence explanation in Section 6 of the report.** This is non-negotiable. Do not simply present both views side-by-side without explaining why they differ.
+
+The divergence block must cover all four of these reasons:
+
+1. **Time Horizon**: Analysts publish 12-month price targets. The Buffett framework evaluates 5–10 year holding periods. A stock can be fairly priced for a 12-month trade and still be a poor long-term investment.
+
+2. **Valuation Methodology**: Analysts use relative valuation (P/E vs peers, P/S vs sector). We use absolute intrinsic value via Owner Earnings DCF. A stock can look "cheap vs peers" and still be overvalued in absolute terms.
+
+3. **Factors Analysts Don't Penalize**: Wall Street consensus rarely penalizes for low insider ownership, geopolitical concentration risk, revenue cyclicality, or customer concentration — all of which the Buffett framework treats as structural risks.
+
+4. **Herd Dynamics Signal**: High analyst bullishness on a stock with a Buffett Score < 50 is a contrarian warning signal, not a buy signal. Analyst herding amplifies momentum and often precedes mean reversion.
+
+**In the PDF report**, render the divergence block as an amber-bordered box in Section 6 with the heading "⚠ Why We Diverge from Analyst Consensus" and list each reason explicitly with the specific data points (e.g., "TipRanks: 7 analysts, 5 Buy — our DCF implies -7.6% margin of safety").
+
+---
+
 ## IMPORTANT BEHAVIORAL NOTES
 
 - Buffett never invests in businesses he doesn't understand. If the business model is unclear, say so.
 - A great business at a fair price beats a fair business at a great price. MOAT is the priority filter.
-- When analyst consensus contradicts Buffett Score, explain the divergence — don't just average them.
+- When analyst consensus contradicts Buffett Score, explain the divergence — don't just average them (see ANALYST DIVERGENCE rule above).
 - For Israeli investors: all prices in USD unless otherwise noted. No local tax efficiency guidance needed.
 - The Entry Conditions section is advisory only — it does not change the fundamental verdict.
 - In high-VIX environments (>30), wide-moat stocks at margin of safety are historically Buffett's best opportunities.

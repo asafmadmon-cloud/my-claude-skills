@@ -34,7 +34,7 @@ def get_color(score: float, max_score: float = 100) -> str:
 def chart_buffett_gauge(buffett_score: int, ticker: str, output_dir: str) -> str:
     if not HAS_MATPLOTLIB:
         return None
-    fig, ax = plt.subplots(figsize=(7, 3.5))
+    fig, ax = plt.subplots(figsize=(10, 4))
     ax.set_xlim(0, 100)
     ax.set_ylim(-0.8, 1.8)
     ax.axis('off')
@@ -81,7 +81,7 @@ def chart_moat_radar(moat_data: dict, ticker: str, output_dir: str) -> str:
     angles = [i * 2 * np.pi / n for i in range(n)] + [0]
     values_plot = values + [values[0]]
 
-    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(projection='polar'))
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(projection='polar'))
     ax.fill(angles, [5] * (n + 1), alpha=0.1, color='#bdc3c7')
     ax.plot(angles, [5] * (n + 1), 'o-', linewidth=1, color='#bdc3c7')
 
@@ -125,7 +125,7 @@ def chart_score_breakdown(score_data: dict, ticker: str, output_dir: str) -> str
         actuals.append(actual)
         maxes.append(max_pts)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, ax = plt.subplots(figsize=(12, 6))
     y = range(len(labels))
     ax.barh(y, maxes, color='#ecf0f1', height=0.55)
     colors = [get_color(a, m) for a, m in zip(actuals, maxes)]
@@ -194,6 +194,79 @@ def chart_valuation(valuation_data: dict, current_price: float, ticker: str, out
     plt.tight_layout()
     path = os.path.join(output_dir, f'{ticker}_valuation.png')
     plt.savefig(path, dpi=120, bbox_inches='tight')
+    plt.close()
+    return path
+
+
+def chart_candlestick_36m(ticker: str, output_dir: str) -> str:
+    """36-month monthly OHLC candlestick chart using raw matplotlib (no mplfinance)."""
+    if not HAS_MATPLOTLIB:
+        return None
+    try:
+        import yfinance as yf
+        from matplotlib.patches import Rectangle
+        from matplotlib.lines import Line2D
+    except ImportError:
+        return None
+
+    try:
+        hist = yf.Ticker(ticker).history(period="3y", interval="1mo")
+    except Exception:
+        return None
+
+    if hist is None or hist.empty:
+        return None
+
+    BG_COLOR  = '#0A0E13'
+    GRID_COL  = '#1E2D3D'
+    BULL_COL  = '#22C55E'
+    BEAR_COL  = '#EF4444'
+    TICK_COL  = '#94A3B8'
+    TITLE_COL = '#F1F5F9'
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor(BG_COLOR)
+    ax.set_facecolor(BG_COLOR)
+
+    candle_w = 0.65
+    for i, (idx, row) in enumerate(hist.iterrows()):
+        o, h, l, c = row['Open'], row['High'], row['Low'], row['Close']
+        color = BULL_COL if c >= o else BEAR_COL
+        body_y = min(o, c)
+        body_h = abs(c - o) if abs(c - o) > 0 else (h - l) * 0.02  # tiny doji
+        ax.add_patch(Rectangle((i - candle_w / 2, body_y), candle_w, body_h,
+                                facecolor=color, edgecolor=color, linewidth=0))
+        ax.add_line(Line2D([i, i], [l, h], color=TICK_COL, linewidth=0.8, alpha=0.7))
+
+    n = len(hist)
+    # X-axis: show every 3rd month label
+    tick_positions = list(range(0, n, 3))
+    tick_labels = [hist.index[i].strftime('%b %Y') for i in tick_positions]
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=7.5, color=TICK_COL)
+    ax.set_xlim(-1, n)
+
+    price_min = hist['Low'].min()
+    price_max = hist['High'].max()
+    padding = (price_max - price_min) * 0.06
+    ax.set_ylim(price_min - padding, price_max + padding)
+
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'${x:,.0f}'))
+    ax.tick_params(axis='y', colors=TICK_COL, labelsize=8)
+    ax.tick_params(axis='x', colors=TICK_COL)
+
+    for spine in ax.spines.values():
+        spine.set_edgecolor(GRID_COL)
+    ax.grid(True, axis='y', color=GRID_COL, linewidth=0.6, alpha=0.8)
+    ax.grid(False, axis='x')
+
+    ax.set_title(f'{ticker} — 36-Month Price History (Monthly Candlestick)',
+                 fontsize=12, fontweight='bold', color=TITLE_COL, pad=10)
+    ax.set_ylabel('Price (USD)', color=TICK_COL, fontsize=9)
+
+    plt.tight_layout()
+    path = os.path.join(output_dir, f'{ticker}_price_36m.png')
+    plt.savefig(path, dpi=120, bbox_inches='tight', facecolor=BG_COLOR)
     plt.close()
     return path
 
@@ -549,6 +622,8 @@ def main():
                 charts.append(chart_valuation(analysis_data.get('valuation', {}),
                                               float(current_price),
                                               ticker, output_dir))
+        # 36-month candlestick (stocks and ETFs)
+        charts.append(chart_candlestick_36m(ticker, output_dir))
     charts = [c for c in charts if c]
 
     # Generate text report
