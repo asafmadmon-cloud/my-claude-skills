@@ -9,6 +9,29 @@ import sys
 import json
 
 
+def _effective_gross_margin(data: dict) -> tuple:
+    """
+    Returns (effective_gm, was_boosted).
+    For mixed hardware+platform companies, the blended gross margin understates
+    platform economics. This detects the signal via the op/gm ratio:
+    when operating margin is disproportionately high vs gross margin
+    (ratio > 0.60), a high-margin platform is embedded in the blended revenue.
+    Only fires when gross margin < 55% — companies already above that threshold
+    don't need correction.
+    """
+    gm = data.get("profitability", {}).get("gross_margin_pct")
+    op = data.get("profitability", {}).get("operating_margin_pct")
+    if not gm or gm <= 0 or not op or op <= 0:
+        return gm, False
+    if gm >= 55:
+        return gm, False
+    op_to_gm = op / gm
+    if op_to_gm > 0.60:
+        boost = min(0.20, (op_to_gm - 0.60) * 1.0)
+        return round(gm * (1 + boost), 1), True
+    return gm, False
+
+
 def score_switching_costs(data: dict) -> dict:
     """
     Switching Costs (0-5): How painful/expensive is it for customers to leave?
@@ -36,8 +59,13 @@ def score_switching_costs(data: dict) -> dict:
             evidence.append(f"Industry '{industry}' typically has high switching costs")
             break
 
-    # Gross margin > 60% often indicates pricing power from lock-in
-    gm = data.get("profitability", {}).get("gross_margin_pct")
+    # Gross margin — use effective margin which adjusts for mixed hardware+platform companies
+    gm, _gm_boosted = _effective_gross_margin(data)
+    if _gm_boosted:
+        evidence.append(
+            f"Gross margin adjusted to {gm}% — operating margin suggests "
+            f"high-margin platform segment embedded in blended revenue"
+        )
     if gm is not None:
         if gm > 70:
             score += 2
@@ -53,6 +81,17 @@ def score_switching_costs(data: dict) -> dict:
     if rev_growth is not None and rev_growth > 5:
         score += 1
         evidence.append(f"Revenue growing {rev_growth}% — stable customer base signal")
+
+    # FCF margin >20%: customers absorbing premium pricing = strong lock-in signal
+    fcf = data.get("cash_flow", {}).get("free_cash_flow")
+    rev = data.get("cash_flow", {}).get("revenue")
+    if fcf and rev and rev > 0:
+        fcf_margin = fcf / rev * 100
+        if fcf_margin > 20:
+            score += 1
+            evidence.append(
+                f"FCF margin {fcf_margin:.0f}% (>20%) — customers absorbing premium pricing; strong lock-in signal"
+            )
 
     score = min(5, score)
     return {
@@ -90,7 +129,12 @@ def score_network_effect(data: dict) -> dict:
             break
 
     # High revenue growth + high margins often indicates network flywheel
-    gm = data.get("profitability", {}).get("gross_margin_pct")
+    gm, _gm_boosted = _effective_gross_margin(data)
+    if _gm_boosted:
+        evidence.append(
+            f"Gross margin adjusted to {gm}% — operating margin suggests "
+            f"high-margin platform segment embedded in blended revenue"
+        )
     rev_growth = data.get("growth", {}).get("revenue_growth_ttm_pct")
 
     if gm and rev_growth and gm > 60 and rev_growth > 15:
@@ -128,7 +172,12 @@ def score_cost_advantage(data: dict) -> dict:
     sector = (data.get("basic", {}).get("sector") or "").lower()
     industry = (data.get("basic", {}).get("industry") or "").lower()
 
-    gm = data.get("profitability", {}).get("gross_margin_pct")
+    gm, _gm_boosted = _effective_gross_margin(data)
+    if _gm_boosted:
+        evidence.append(
+            f"Gross margin adjusted to {gm}% — operating margin suggests "
+            f"high-margin platform segment embedded in blended revenue"
+        )
     op_margin = data.get("profitability", {}).get("operating_margin_pct")
     net_margin = data.get("profitability", {}).get("net_margin_pct")
 
@@ -252,7 +301,12 @@ def score_intangible_assets(data: dict) -> dict:
             break
 
     # Sustained high gross margins = pricing power = brand/intangible signal
-    gm = data.get("profitability", {}).get("gross_margin_pct")
+    gm, _gm_boosted = _effective_gross_margin(data)
+    if _gm_boosted:
+        evidence.append(
+            f"Gross margin adjusted to {gm}% — operating margin suggests "
+            f"high-margin platform segment embedded in blended revenue"
+        )
     if gm is not None:
         if gm > 65:
             score += 2
@@ -327,6 +381,17 @@ def score_efficient_scale(data: dict) -> dict:
             evidence.append(
                 f"High capex ({capex_pct:.0f}% of revenue) + strong margins ({op_margin}%) = capital moat"
             )
+
+    # EV/Revenue >8x at mega-cap scale = market-priced dominance signal.
+    # Investors only sustain extreme revenue multiples for businesses with durable,
+    # near-impossible-to-replicate competitive positions.
+    ev_rev = data.get("valuation", {}).get("ev_to_revenue")
+    if ev_rev and ev_rev > 8 and mktcap and mktcap > 500_000_000_000:
+        score += 1
+        evidence.append(
+            f"EV/Revenue {ev_rev:.1f}x at ${mktcap/1e9:.0f}B market cap — "
+            f"market-priced dominance; entry barriers confirmed by capital markets"
+        )
 
     score = min(5, score)
     return {
