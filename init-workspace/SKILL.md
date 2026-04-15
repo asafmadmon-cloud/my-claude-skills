@@ -276,6 +276,16 @@ Located at: `<folder path>`
 <!-- Link to other KB files as the project grows -->
 ```
 
+## Lifecycle — when to run vs. when to update
+
+**Run this skill once** — at project start, whether the folder is empty or has existing code.
+
+**Don't re-run it** for routine updates. As the project grows, just tell Claude:
+"The project now has files — update my memory files / CLAUDE.md to reflect what's there."
+Claude will read the current state and update only what changed, without re-asking setup questions.
+
+Re-run this skill only if the workspace files were lost or need a full reset from scratch.
+
 ## What to avoid
 
 - Don't write generic placeholder content that could apply to any project ("This project uses modern best practices...")
