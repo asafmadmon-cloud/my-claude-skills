@@ -80,6 +80,12 @@ Read 2-3 source files from the main directories to confirm what you see.
 
 Don't over-read. Skim enough to understand purpose, not internals.
 
+**Empty workspace:** If the folder has no meaningful files (empty or only contains an empty README),
+skip exploration entirely and go straight to Step 2.5. Tell the user:
+"This looks like a blank workspace — I'll set things up as a starting point rather than a reflection
+of existing code. Answer the questions and I'll create the full context structure for you."
+All Q1–Q10 answers start blank; none are pre-filled.
+
 ### Step 2: Detect slug
 
 The memory folder path requires the Windows project slug. Compute it from the current working
