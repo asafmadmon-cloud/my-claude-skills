@@ -1,6 +1,6 @@
 # Red Flags Reference
 
-Patterns to detect when auditing skill repos. Sourced from repo-forensics's 18 documented scanner categories, adapted for static analysis via WebFetch.
+Patterns to detect when auditing skill repos. Sourced from repo-forensics's documented scanner categories, adapted for static analysis via WebFetch.
 
 Severity levels: 🚫 BLOCK-level | ⚠️ WARN-level | 💡 Note-level
 
@@ -84,6 +84,8 @@ Patterns in `hooks/` directory files:
 ## 5. Tool Poisoning
 
 🚫 BLOCK:
+- `<IMPORTANT>` tags in SKILL.md, README, or any prompt-facing file containing instruction-style text — this is the primary vector for tool poisoning (documented by Invariant Labs)
+- HTML comment blocks (`<!--`) containing directives: "ignore", "you must", "do not", "disregard", "always"
 - SKILL.md instructs Claude to describe its own capabilities differently than they are
 - Instructions to claim tools are unavailable when they are
 - Instructions to modify tool descriptions dynamically based on context
@@ -91,6 +93,7 @@ Patterns in `hooks/` directory files:
 
 ⚠️ WARN:
 - Unusually complex instructions about how Claude should describe what it's doing
+- Tool descriptions that reference behavior outside the skill's stated purpose
 
 ---
 
@@ -99,12 +102,16 @@ Patterns in `hooks/` directory files:
 🚫 BLOCK:
 - Instructions to download and execute code at runtime
 - Instructions to modify SKILL.md or other skill files during execution
-- "Time bomb" patterns: instructions that activate based on date/time conditions
+- `eval(`, `new Function(`, `exec(` called with a non-literal (variable) argument
+- `import(variable)` or `require(variable)` — dynamic module loading at runtime
+- `setTimeout` or `setInterval` executing a string argument (not a function reference)
+- Time-bomb patterns: `new Date()` / `datetime.now()` / `Date.now()` inside a conditional that gates a network call or destructive action
 - Instructions conditioned on detecting monitoring or evaluation contexts ("if you are being tested")
 
 ⚠️ WARN:
 - Instructions to fetch additional instructions from external URLs at runtime
 - Deferred or conditional behavior not explained by the skill's purpose
+- Date/time checks that gate non-network behavior (version checks, UI toggles) without explanation
 
 ---
 
@@ -112,10 +119,10 @@ Patterns in `hooks/` directory files:
 
 🚫 BLOCK:
 - Base64-encoded blobs in skill files with no clear purpose
-- Long random-looking strings (high entropy) that aren't API keys with obvious context
+- Long random-looking strings (high entropy, >32 chars, mixed upper/lower/digits/symbols) that aren't API keys with obvious context
 - Hex-encoded strings decoded at runtime
 - Unicode homoglyph substitution (e.g., using Cyrillic characters that look like Latin)
-- Zero-width characters in text (used to hide content)
+- Zero-width characters in text: U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+FEFF (BOM) — used to hide instructions in visible text
 - Instructions referencing external files by hash rather than name
 
 ⚠️ WARN:
@@ -153,8 +160,11 @@ Patterns that indicate hardcoded secrets (🚫 BLOCK if found in any committed f
 - `AKIA[0-9A-Z]{16}` — AWS access key
 - `-----BEGIN RSA PRIVATE KEY-----` — private key
 - `-----BEGIN EC PRIVATE KEY-----` — EC private key
+- `xoxb-[0-9]+-` — Slack bot token
+- `xoxp-[0-9]+-` — Slack user token
 - Hardcoded passwords in connection strings
-- Bearer tokens in source code
+- Bearer tokens in source code (`bearer [a-zA-Z0-9._-]{20,}`)
+- `password\s*=\s*["'][^"']{8,}["']` — hardcoded password assignment
 
 Note: flag even if the author claims they are "example" or "placeholder" values — legitimate examples use clearly fake values like `YOUR_API_KEY_HERE`.
 
@@ -172,16 +182,17 @@ Note: flag even if the author claims they are "example" or "placeholder" values 
 
 ## 11. Git Forensics Signals
 
-Check repo metadata for:
+Check via: `https://api.github.com/repos/{owner}/{repo}/commits?per_page=20`
 
 ⚠️ WARN:
 - Repo created < 7 days ago with no prior activity from the owner
 - Owner account created < 30 days ago
-- Commit history shows a large initial commit with no gradual development (possible code drop from elsewhere)
+- Commit history shows a single large initial commit with many files (possible code drop from elsewhere)
+- Commit messages containing "remove", "clean", "delete", "oops", "revert" near filenames like `.env`, `keys`, `credentials`, `secret`, `token` — suggests a secret was committed and then removed (it may still be in git history)
 - README makes extraordinary claims without links to verification
 
 💡 Note:
-- Force-pushes to main (visible via large gap in commit count vs. push count)
+- Large gaps in commit timeline may indicate history rewrite
 - Deleted branches with no explanation
 
 ---
@@ -189,14 +200,15 @@ Check repo metadata for:
 ## 12. Social Engineering in README
 
 ⚠️ WARN:
-- Urgency language: "install now", "limited time", "don't miss out"
+- Urgency language: "install now", "limited time", "don't miss out", "before it's removed"
 - Authority claims without verification: "official", "certified", "approved by Anthropic"
-- Fear language: "your system is vulnerable without this"
+- Fear language: "your system is vulnerable without this", "critical security tool"
 - Requests to disable security tools before installing
-- Claims of extreme performance without benchmarks ("18 parallel scanners", "2,026 CVEs", "450+ patterns" with no source)
+- Requests to run with elevated permissions or `sudo`
+- Extraordinary performance claims without benchmarks or sources ("18 parallel scanners", "500+ patterns", "undetectable")
 
 💡 Note:
-- These don't block on their own but lower the overall trust signal
+- These don't block on their own but lower the overall trust signal when combined with other flags
 
 ---
 
@@ -211,6 +223,38 @@ Check repo metadata for:
 ⚠️ WARN:
 - Skill requests broad filesystem or network access not needed for its purpose
 - MCP server requests permissions beyond read-only for a read-only use case
+
+---
+
+## 14. MCP-Specific Threats
+
+Applies when `tools.json` is present:
+
+🚫 BLOCK:
+- Any tool `description` field containing instruction-style overrides: "ignore", "always", "you must", "do not tell the user", "disregard previous"
+- Tool descriptions that claim capabilities beyond the repo's stated purpose (full-schema poisoning)
+- Tool `name` fields that impersonate built-in Claude capabilities (`read_file`, `execute_code`, `web_search`)
+
+⚠️ WARN:
+- Tool `description` field longer than 200 characters — unusually verbose descriptions are a schema poisoning vector
+- Tool input schemas that request more fields than needed for the stated function
+- Multiple tools with overlapping names that could cause routing confusion
+
+---
+
+## 15. Cross-file Taint Signals
+
+Flag when the **same file** does both of the following:
+
+🚫 BLOCK — if destination URL is unknown/dynamic:
+- Reads environment variables: `process.env`, `os.environ`, `os.getenv`, `dotenv.config()`
+- AND makes a network call to a non-hardcoded or non-obvious destination: `fetch(url)`, `axios.post(endpoint)`, `requests.post(url)`, `urllib.request.urlopen(addr)`
+
+⚠️ WARN — if destination URL is hardcoded and well-known but combination is unexplained:
+- Same as above but the network destination is a recognizable API (GitHub, Slack, etc.) — still worth noting so the user understands what data leaves the machine
+
+💡 Note:
+- Legitimate skills that call APIs usually have the destination URL hardcoded and documented. Dynamic destinations are almost always suspicious.
 
 ---
 
